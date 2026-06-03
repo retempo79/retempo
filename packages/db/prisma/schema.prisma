@@ -1,0 +1,11 @@
+// Placeholder Prisma schema for Retempo operational records.
+// Models will be added when database implementation work begins.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
