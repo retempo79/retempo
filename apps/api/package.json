@@ -13,7 +13,9 @@
     "@hono/node-server": "^1.19.7",
     "@retempo/db": "workspace:^",
     "@retempo/shared": "workspace:*",
-    "hono": "^4.12.23"
+    "dotenv": "^17.4.2",
+    "hono": "^4.12.23",
+    "viem": "^2.52.0"
   },
   "devDependencies": {
     "@types/node": "^20.19.0",

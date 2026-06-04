@@ -1,10 +1,27 @@
 import { serve } from "@hono/node-server";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { config as loadDotenv } from "dotenv";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { Context } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { db, Prisma } from "@retempo/db";
 import { API_ROOT, APP_NAME } from "@retempo/shared";
+import {
+  ChainSettlementError,
+  decimalStringToUnits,
+  normalizeAddress,
+  normalizeBytes32,
+  readArcSettlementReceipt,
+  submitArcSettlement,
+  type ChainSettlementInput
+} from "./arc-settlement.js";
+
+const localEnvPath = fileURLToPath(new URL("../../../.env", import.meta.url));
+if (existsSync(localEnvPath)) {
+  loadDotenv({ path: localEnvPath });
+}
 
 export const app = new Hono();
 
@@ -137,6 +154,10 @@ class ApiError extends Error {
 
 function jsonError(c: Context, status: ApiStatus, message: string) {
   return c.json({ error: message }, status);
+}
+
+function chainErrorStatus(error: unknown): ApiStatus {
+  return error instanceof ChainSettlementError ? 400 : 500;
 }
 
 async function ensurePlanBelongsToService(paymentPlanId: string, serviceId: string) {
@@ -426,7 +447,6 @@ app.post(`${API_ROOT}/settlements`, async (c) => {
     where: { id: invoiceId }
   });
 
-  const status = enumField(body, "status", ["PENDING", "SUBMITTED"] as const, "PENDING");
   const payerId = stringField(body, "payerId") ?? invoice.userId;
   const merchantId = stringField(body, "merchantId") ?? invoice.service.ownerId;
 
@@ -440,33 +460,158 @@ app.post(`${API_ROOT}/settlements`, async (c) => {
   await db.user.findUniqueOrThrow({ where: { id: payerId } });
   await db.user.findUniqueOrThrow({ where: { id: merchantId } });
 
-  const settlement = await db.settlement.create({
-    data: {
-      amount: decimalField(body, "amount") ?? invoice.amount,
-      currency: stringField(body, "currency") ?? invoice.currency,
-      invoiceId,
-      merchantId,
-      payerId,
-      recordedAt: dateField(body, "recordedAt"),
-      referenceHash: requiredStringField(body, "referenceHash"),
-      serviceId: invoice.serviceId,
-      status,
-      transactionHash: stringField(body, "transactionHash")
-    },
-    include: settlementInclude
+  const amount = decimalField(body, "amount") ?? invoice.amount;
+  const referenceHash = requiredStringField(body, "referenceHash");
+  const recordedAt = dateField(body, "recordedAt") ?? new Date();
+  const payerAddress = normalizeAddress(requiredStringField(body, "payerAddress"), "payerAddress");
+  const merchantAddress = normalizeAddress(requiredStringField(body, "merchantAddress"), "merchantAddress");
+  const contractReferenceHash = normalizeBytes32(referenceHash, "referenceHash");
+  const contractAmount = decimalStringToUnits(amount.toFixed(6));
+  const contractTimestamp = BigInt(Math.floor(recordedAt.getTime() / 1000));
+
+  let settlement = await db.settlement.findFirst({
+    include: settlementInclude,
+    orderBy: { createdAt: "desc" },
+    where: { invoiceId, referenceHash }
   });
 
-  return c.json({ settlement }, 201);
+  if (settlement?.status === "CONFIRMED") {
+    return c.json({ settlement }, 200);
+  }
+
+  if (settlement?.status === "SUBMITTED" && settlement.transactionHash) {
+    const refreshedSettlement = await refreshSubmittedSettlement(settlement.id);
+    return c.json({ settlement: refreshedSettlement }, 200);
+  }
+
+  settlement = settlement
+    ? await db.settlement.update({
+        data: {
+          amount,
+          currency: stringField(body, "currency") ?? invoice.currency,
+          merchantId,
+          payerId,
+          recordedAt,
+          serviceId: invoice.serviceId,
+          status: "PENDING",
+          transactionHash: null
+        },
+        include: settlementInclude,
+        where: { id: settlement.id }
+      })
+    : await db.settlement.create({
+        data: {
+          amount,
+          currency: stringField(body, "currency") ?? invoice.currency,
+          invoiceId,
+          merchantId,
+          payerId,
+          recordedAt,
+          referenceHash,
+          serviceId: invoice.serviceId,
+          status: "PENDING"
+        },
+        include: settlementInclude
+      });
+
+  const chainInput: ChainSettlementInput = {
+    amount: contractAmount,
+    invoiceId,
+    merchant: merchantAddress,
+    payer: payerAddress,
+    referenceHash: contractReferenceHash,
+    serviceId: invoice.serviceId,
+    timestamp: contractTimestamp
+  };
+
+  try {
+    const result = await submitArcSettlement(chainInput);
+    const confirmed = result.receipt.status === "success" && result.eventObserved;
+
+    settlement = await db.settlement.update({
+      data: {
+        status: confirmed ? "CONFIRMED" : "FAILED",
+        transactionHash: result.transactionHash
+      },
+      include: settlementInclude,
+      where: { id: settlement.id }
+    });
+
+    if (confirmed) {
+      await db.invoice.update({
+        data: { paidAt: recordedAt, status: "PAID" },
+        where: { id: invoiceId }
+      });
+    }
+
+    return c.json(
+      {
+        settlement,
+        chain: {
+          eventObserved: result.eventObserved,
+          receiptStatus: result.receipt.status,
+          transactionHash: result.transactionHash
+        }
+      },
+      confirmed ? 201 : 500
+    );
+  } catch (error) {
+    await db.settlement.update({
+      data: { status: "FAILED" },
+      where: { id: settlement.id }
+    });
+
+    const message = error instanceof Error ? error.message : "Arc settlement transaction failed.";
+    return jsonError(c, chainErrorStatus(error), message);
+  }
 });
 
+async function refreshSubmittedSettlement(settlementId: string) {
+  const settlement = await db.settlement.findUniqueOrThrow({
+    include: settlementInclude,
+    where: { id: settlementId }
+  });
+
+  if (settlement.status !== "SUBMITTED" || !settlement.transactionHash) {
+    return settlement;
+  }
+
+  const receiptResult = await readArcSettlementReceipt(settlement.transactionHash as `0x${string}`, {
+    amount: decimalStringToUnits(settlement.amount.toFixed(6)),
+    invoiceId: settlement.invoiceId,
+    referenceHash: normalizeBytes32(settlement.referenceHash, "referenceHash"),
+    serviceId: settlement.serviceId
+  });
+  const confirmed = receiptResult.receipt.status === "success" && receiptResult.eventObserved;
+
+  const updatedSettlement = await db.settlement.update({
+    data: { status: confirmed ? "CONFIRMED" : "FAILED" },
+    include: settlementInclude,
+    where: { id: settlement.id }
+  });
+
+  if (confirmed) {
+    await db.invoice.update({
+      data: { paidAt: settlement.recordedAt ?? new Date(), status: "PAID" },
+      where: { id: settlement.invoiceId }
+    });
+  }
+
+  return updatedSettlement;
+}
+
 app.get(`${API_ROOT}/settlements/:settlementId`, async (c) => {
-  const settlement = await db.settlement.findUnique({
+  let settlement = await db.settlement.findUnique({
     include: settlementInclude,
     where: { id: c.req.param("settlementId") }
   });
 
   if (!settlement) {
     return jsonError(c, 404, "Settlement was not found.");
+  }
+
+  if (settlement.status === "SUBMITTED" && settlement.transactionHash) {
+    settlement = await refreshSubmittedSettlement(settlement.id);
   }
 
   return c.json({ settlement });

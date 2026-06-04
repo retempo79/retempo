@@ -34,6 +34,10 @@ MVP target network:
 - RPC: https://rpc.testnet.arc.network
 - Chain ID: 5042002
 
+For settlement creation, the backend submits `RetempoSettlement.recordSettlement(...)` to the
+deployed Arc Testnet contract using the local operator wallet configured in `.env`. The backend
+does not fabricate transaction hashes, receipts, or confirmations.
+
 ## Design decision
 
 Retempo v0.1 is an API-first settlement orchestration layer.
