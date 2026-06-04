@@ -11,9 +11,11 @@ import { API_ROOT, APP_NAME } from "@retempo/shared";
 import {
   ChainSettlementError,
   decimalStringToUnits,
+  getCircleSettlementWalletAddress,
   normalizeAddress,
   normalizeBytes32,
   readArcSettlementReceipt,
+  settlementExecutionMode,
   submitArcSettlement,
   type ChainSettlementInput
 } from "./arc-settlement.js";
@@ -211,6 +213,9 @@ async function upsertUserFromBody(
 app.onError((error, c) => {
   if (error instanceof ApiError) {
     return jsonError(c, error.status, error.message);
+  }
+  if (error instanceof ChainSettlementError) {
+    return jsonError(c, 400, error.message);
   }
 
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
@@ -463,8 +468,16 @@ app.post(`${API_ROOT}/settlements`, async (c) => {
   const amount = decimalField(body, "amount") ?? invoice.amount;
   const referenceHash = requiredStringField(body, "referenceHash");
   const recordedAt = dateField(body, "recordedAt") ?? new Date();
-  const payerAddress = normalizeAddress(requiredStringField(body, "payerAddress"), "payerAddress");
-  const merchantAddress = normalizeAddress(requiredStringField(body, "merchantAddress"), "merchantAddress");
+  const defaultCircleAddress =
+    settlementExecutionMode() === "circle" ? await getCircleSettlementWalletAddress() : undefined;
+  const payerAddress = normalizeAddress(
+    stringField(body, "payerAddress") ?? defaultCircleAddress ?? requiredStringField(body, "payerAddress"),
+    "payerAddress"
+  );
+  const merchantAddress = normalizeAddress(
+    stringField(body, "merchantAddress") ?? defaultCircleAddress ?? requiredStringField(body, "merchantAddress"),
+    "merchantAddress"
+  );
   const contractReferenceHash = normalizeBytes32(referenceHash, "referenceHash");
   const contractAmount = decimalStringToUnits(amount.toFixed(6));
   const contractTimestamp = BigInt(Math.floor(recordedAt.getTime() / 1000));
@@ -548,7 +561,10 @@ app.post(`${API_ROOT}/settlements`, async (c) => {
       {
         settlement,
         chain: {
+          circleTransactionId: result.circleTransactionId,
+          circleTransactionState: result.circleTransactionState,
           eventObserved: result.eventObserved,
+          executor: result.executor,
           receiptStatus: result.receipt.status,
           transactionHash: result.transactionHash
         }

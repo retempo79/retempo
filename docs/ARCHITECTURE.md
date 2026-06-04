@@ -34,9 +34,11 @@ MVP target network:
 - RPC: https://rpc.testnet.arc.network
 - Chain ID: 5042002
 
-For settlement creation, the backend submits `RetempoSettlement.recordSettlement(...)` to the
-deployed Arc Testnet contract using the local operator wallet configured in `.env`. The backend
-does not fabricate transaction hashes, receipts, or confirmations.
+For settlement creation, the backend supports two local execution modes. `SETTLEMENT_EXECUTION_MODE`
+`circle` submits `RetempoSettlement.recordSettlement(...)` with Circle Developer-Controlled Wallets
+and verifies the resulting onchain transaction hash against Arc RPC. `direct` keeps the local Arc
+private-key path as the fallback development mode. The backend does not fabricate transaction
+hashes, receipts, or confirmations.
 
 ## Design decision
 
