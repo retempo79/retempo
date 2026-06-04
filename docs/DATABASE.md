@@ -42,6 +42,20 @@ The database stores operational records only:
 - settlement references
 - transaction hashes
 
+## Migration command
+
+Run the Prisma migration baseline against a real local PostgreSQL database:
+
+```bash
+DATABASE_URL="postgresql://USER:PASSWORD@localhost:5432/retempo" pnpm --filter @retempo/db db:migrate
+```
+
+Validate the schema before migration with:
+
+```bash
+pnpm --filter @retempo/db db:validate
+```
+
 ## Excluded from MVP
 
 - balances
