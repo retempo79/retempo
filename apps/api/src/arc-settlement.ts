@@ -1,4 +1,5 @@
 import {
+  encodeFunctionData,
   createPublicClient,
   createWalletClient,
   getAddress,
@@ -10,7 +11,15 @@ import {
   type Hex,
   type TransactionReceipt
 } from "viem";
+import { randomUUID } from "node:crypto";
+import { createRequire } from "node:module";
 import { privateKeyToAccount } from "viem/accounts";
+import type * as CircleDeveloperWallets from "@circle-fin/developer-controlled-wallets";
+
+const require = createRequire(import.meta.url);
+const { initiateDeveloperControlledWalletsClient } = require(
+  "@circle-fin/developer-controlled-wallets"
+) as typeof CircleDeveloperWallets;
 
 export const ARC_TESTNET_CHAIN_ID = 5042002;
 
@@ -71,6 +80,9 @@ export type ChainSettlementResult = {
   transactionHash: Hex;
   receipt: TransactionReceipt;
   eventObserved: boolean;
+  executor: "direct" | "circle";
+  circleTransactionId?: string;
+  circleTransactionState?: string;
 };
 
 export class ChainSettlementError extends Error {
@@ -87,11 +99,24 @@ function requiredEnv(key: string) {
   return value;
 }
 
+export function settlementExecutionMode() {
+  const mode = process.env.SETTLEMENT_EXECUTION_MODE?.trim().toLowerCase() || "direct";
+  if (mode !== "circle" && mode !== "direct") {
+    throw new ChainSettlementError("SETTLEMENT_EXECUTION_MODE must be circle or direct.");
+  }
+  return mode;
+}
+
+function getCircleClient() {
+  return initiateDeveloperControlledWalletsClient({
+    apiKey: requiredEnv("CIRCLE_API_KEY"),
+    entitySecret: requiredEnv("CIRCLE_ENTITY_SECRET")
+  });
+}
+
 function getArcConfig() {
   const rpcUrl = requiredEnv("ARC_RPC_URL");
   const chainId = Number(requiredEnv("ARC_CHAIN_ID"));
-  const privateKey = requiredEnv("ARC_DEPLOYER_PRIVATE_KEY");
-  const operatorAddress = normalizeAddress(requiredEnv("RETEMPO_OPERATOR_ADDRESS"), "RETEMPO_OPERATOR_ADDRESS");
   const settlementContractAddress = normalizeAddress(
     requiredEnv("RETEMPO_SETTLEMENT_CONTRACT_ADDRESS"),
     "RETEMPO_SETTLEMENT_CONTRACT_ADDRESS"
@@ -110,6 +135,23 @@ function getArcConfig() {
     );
   }
 
+  return {
+    chain: {
+      id: ARC_TESTNET_CHAIN_ID,
+      name: "Arc Testnet",
+      nativeCurrency: { decimals: 6, name: "USDC", symbol: "USDC" },
+      rpcUrls: { default: { http: [rpcUrl] } }
+    },
+    contractAddress: settlementContractAddress,
+    rpcUrl
+  };
+}
+
+function getDirectArcConfig() {
+  const config = getArcConfig();
+  const privateKey = requiredEnv("ARC_DEPLOYER_PRIVATE_KEY");
+  const operatorAddress = normalizeAddress(requiredEnv("RETEMPO_OPERATOR_ADDRESS"), "RETEMPO_OPERATOR_ADDRESS");
+
   const formattedPrivateKey = privateKey.startsWith("0x") ? privateKey : `0x${privateKey}`;
   if (!isHex(formattedPrivateKey)) {
     throw new ChainSettlementError("ARC_DEPLOYER_PRIVATE_KEY must be a hex private key.");
@@ -121,15 +163,9 @@ function getArcConfig() {
   }
 
   return {
+    ...config,
     account,
-    chain: {
-      id: ARC_TESTNET_CHAIN_ID,
-      name: "Arc Testnet",
-      nativeCurrency: { decimals: 6, name: "USDC", symbol: "USDC" },
-      rpcUrls: { default: { http: [rpcUrl] } }
-    },
-    contractAddress: settlementContractAddress,
-    rpcUrl
+    operatorAddress
   };
 }
 
@@ -162,7 +198,15 @@ export function decimalStringToUnits(value: string, decimals = 6) {
 }
 
 export async function submitArcSettlement(input: ChainSettlementInput): Promise<ChainSettlementResult> {
-  const config = getArcConfig();
+  const mode = settlementExecutionMode();
+  if (mode === "circle") {
+    return submitCircleSettlement(input);
+  }
+  return submitDirectArcSettlement(input);
+}
+
+async function submitDirectArcSettlement(input: ChainSettlementInput): Promise<ChainSettlementResult> {
+  const config = getDirectArcConfig();
   const publicClient = createPublicClient({
     chain: config.chain,
     transport: http(config.rpcUrl)
@@ -196,8 +240,65 @@ export async function submitArcSettlement(input: ChainSettlementInput): Promise<
   return {
     transactionHash,
     receipt,
-    eventObserved: settlementRecordedEventObserved(receipt, input)
+    eventObserved: settlementRecordedEventObserved(receipt, input),
+    executor: "direct"
   };
+}
+
+async function submitCircleSettlement(input: ChainSettlementInput): Promise<ChainSettlementResult> {
+  const config = getArcConfig();
+  const client = getCircleClient();
+
+  const createdTransaction = await client.createContractExecutionTransaction({
+    callData: encodeSettlementCallData(input),
+    contractAddress: config.contractAddress,
+    fee: {
+      type: "level",
+      config: { feeLevel: "HIGH" }
+    },
+    idempotencyKey: randomUUID(),
+    refId: input.referenceHash,
+    walletId: requiredEnv("CIRCLE_WALLET_ID")
+  });
+  const circleTransactionId = createdTransaction.data?.id;
+  if (!circleTransactionId) {
+    throw new ChainSettlementError("Circle did not return a transaction ID.");
+  }
+
+  const transactionResponse = await client.getTransaction({
+    id: circleTransactionId,
+    pollingInterval: 2000,
+    waitForState: "CONFIRMED"
+  });
+  const transaction = transactionResponse.data?.transaction;
+  const circleTransactionState = transaction?.state;
+  if (circleTransactionState !== "CONFIRMED" && circleTransactionState !== "COMPLETE") {
+    throw new ChainSettlementError("Circle transaction did not reach CONFIRMED or COMPLETE.");
+  }
+  if (!transaction?.txHash) {
+    throw new ChainSettlementError("Circle transaction is confirmed but missing txHash.");
+  }
+
+  const transactionHash = normalizeBytes32(transaction.txHash, "Circle txHash");
+  const receiptResult = await readArcSettlementReceipt(transactionHash, input);
+
+  return {
+    transactionHash,
+    receipt: receiptResult.receipt,
+    eventObserved: receiptResult.eventObserved,
+    executor: "circle",
+    circleTransactionId,
+    circleTransactionState
+  };
+}
+
+export async function getCircleSettlementWalletAddress() {
+  const response = await getCircleClient().getWallet({ id: requiredEnv("CIRCLE_WALLET_ID") });
+  const wallet = response.data?.wallet as { address?: string } | undefined;
+  if (!wallet?.address) {
+    throw new ChainSettlementError("Circle wallet response did not include an address.");
+  }
+  return normalizeAddress(wallet.address, "Circle wallet address");
 }
 
 export async function readArcSettlementReceipt(transactionHash: Hex, expected: Partial<ChainSettlementInput>) {
@@ -232,6 +333,22 @@ function settlementRecordedEventObserved(receipt: TransactionReceipt, expected: 
       matches(args.referenceHash, expected.referenceHash) &&
       matches(args.timestamp, expected.timestamp)
     );
+  });
+}
+
+function encodeSettlementCallData(input: ChainSettlementInput) {
+  return encodeFunctionData({
+    abi: RETEMPO_SETTLEMENT_ABI,
+    functionName: "recordSettlement",
+    args: [
+      input.invoiceId,
+      input.serviceId,
+      input.payer,
+      input.merchant,
+      input.amount,
+      input.referenceHash,
+      input.timestamp
+    ]
   });
 }
 

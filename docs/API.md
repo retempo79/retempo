@@ -28,8 +28,8 @@ Required request fields:
 
 - `invoiceId`
 - `referenceHash` as a 32-byte hex value
-- `payerAddress` as the wallet address recorded onchain
-- `merchantAddress` as the wallet address recorded onchain
+- `payerAddress` as the wallet address recorded onchain, unless Circle mode should default to `CIRCLE_WALLET_ID`
+- `merchantAddress` as the wallet address recorded onchain, unless Circle mode should default to `CIRCLE_WALLET_ID`
 
 Optional request fields:
 
@@ -39,10 +39,13 @@ Optional request fields:
 - `currency`, defaulting to the invoice currency
 - `recordedAt`, defaulting to the current server time
 
-The backend stores only the real transaction hash returned by Arc RPC. It marks a settlement
-`CONFIRMED` only after reading a real successful Arc receipt and observing the expected
-`SettlementRecorded` contract event. The linked invoice is marked `PAID` only after that real
-settlement confirmation.
+The backend stores only a real onchain transaction hash returned by the configured settlement
+executor. In `SETTLEMENT_EXECUTION_MODE="circle"`, the backend submits the contract call with
+Circle Developer-Controlled Wallets and verifies the Circle-returned `txHash` against Arc RPC. In
+`SETTLEMENT_EXECUTION_MODE="direct"`, the backend uses the local direct Arc private-key path for
+fallback development. Both modes mark a settlement `CONFIRMED` only after reading a real successful
+Arc receipt and observing the expected `SettlementRecorded` contract event. The linked invoice is
+marked `PAID` only after that real settlement confirmation.
 
 ## Backend responsibility
 
