@@ -48,4 +48,5 @@ The backend manages:
 
 Only an authorized Retempo operator wallet should be allowed to record settlements.
 
-The operator wallet integration must be validated against official Circle documentation during implementation.
+The Arc Testnet operator wallet is configured locally through backend environment variables.
+Retempo v0.1 does not use Circle integration for settlement registry submission.
