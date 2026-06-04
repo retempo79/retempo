@@ -12,10 +12,18 @@
   "scripts": {
     "dev": "tsc --watch",
     "build": "tsc",
+    "db:generate": "prisma generate --schema prisma/schema.prisma",
+    "db:migrate": "prisma migrate deploy --schema prisma/schema.prisma",
+    "db:validate": "prisma validate --schema prisma/schema.prisma",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@types/node": "^20.19.0",
+    "prisma": "^6.19.3",
     "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.3"
   }
 }

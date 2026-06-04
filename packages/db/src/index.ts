@@ -1,3 +1,13 @@
-export type DatabasePackageStatus = "placeholder";
+import { Prisma, PrismaClient } from "@prisma/client";
 
-export const databasePackageStatus: DatabasePackageStatus = "placeholder";
+export { Prisma, PrismaClient };
+
+const globalForPrisma = globalThis as unknown as {
+  prisma?: PrismaClient;
+};
+
+export const db = globalForPrisma.prisma ?? new PrismaClient();
+
+if (process.env.NODE_ENV !== "production") {
+  globalForPrisma.prisma = db;
+}
