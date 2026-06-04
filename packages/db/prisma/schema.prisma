@@ -1,6 +1,3 @@
-// Placeholder Prisma schema for Retempo operational records.
-// Models will be added when database implementation work begins.
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,4 +5,254 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CUSTOMER
+  MERCHANT
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum ServiceStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum PaymentPlanStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum PricingType {
+  FLAT
+  USAGE_BASED
+}
+
+enum BillingInterval {
+  ONE_TIME
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+enum CheckoutSessionStatus {
+  OPEN
+  COMPLETED
+  EXPIRED
+  CANCELED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAUSED
+  CANCELED
+  ENDED
+}
+
+enum UsageEventStatus {
+  RECORDED
+  INVOICED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  OPEN
+  PAID
+  VOID
+}
+
+enum SettlementStatus {
+  PENDING
+  RECORDED
+  FAILED
+}
+
+model User {
+  id                  String            @id @default(cuid())
+  email               String            @unique
+  name                String?
+  role                UserRole          @default(CUSTOMER)
+  status              UserStatus        @default(ACTIVE)
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+  services            Service[]         @relation("ServiceOwner")
+  checkoutSessions    CheckoutSession[]
+  subscriptions       Subscription[]
+  usageEvents         UsageEvent[]
+  invoices            Invoice[]
+  payerSettlements    Settlement[]      @relation("SettlementPayer")
+  merchantSettlements Settlement[]      @relation("SettlementMerchant")
+
+  @@map("users")
+}
+
+model Service {
+  id               String            @id @default(cuid())
+  ownerId          String            @map("owner_id")
+  name             String
+  description      String?
+  status           ServiceStatus     @default(DRAFT)
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+  owner            User              @relation("ServiceOwner", fields: [ownerId], references: [id])
+  paymentPlans     PaymentPlan[]
+  checkoutSessions CheckoutSession[]
+  subscriptions    Subscription[]
+  usageEvents      UsageEvent[]
+  invoices         Invoice[]
+  settlements      Settlement[]
+
+  @@index([ownerId])
+  @@map("services")
+}
+
+model PaymentPlan {
+  id               String            @id @default(cuid())
+  serviceId        String            @map("service_id")
+  name             String
+  description      String?
+  pricingType      PricingType       @map("pricing_type")
+  billingInterval  BillingInterval   @map("billing_interval")
+  amount           Decimal           @db.Decimal(20, 6)
+  currency         String            @default("USDC")
+  status           PaymentPlanStatus @default(DRAFT)
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+  service          Service           @relation(fields: [serviceId], references: [id])
+  checkoutSessions CheckoutSession[]
+  subscriptions    Subscription[]
+  invoices         Invoice[]
+
+  @@index([serviceId])
+  @@map("payment_plans")
+}
+
+model CheckoutSession {
+  id            String                @id @default(cuid())
+  serviceId     String                @map("service_id")
+  paymentPlanId String                @map("payment_plan_id")
+  userId        String?               @map("user_id")
+  status        CheckoutSessionStatus @default(OPEN)
+  expiresAt     DateTime?             @map("expires_at")
+  completedAt   DateTime?             @map("completed_at")
+  createdAt     DateTime              @default(now()) @map("created_at")
+  updatedAt     DateTime              @updatedAt @map("updated_at")
+  service       Service               @relation(fields: [serviceId], references: [id])
+  paymentPlan   PaymentPlan           @relation(fields: [paymentPlanId], references: [id])
+  user          User?                 @relation(fields: [userId], references: [id])
+  subscriptions Subscription[]
+
+  @@index([serviceId])
+  @@index([paymentPlanId])
+  @@index([userId])
+  @@map("checkout_sessions")
+}
+
+model Subscription {
+  id                 String             @id @default(cuid())
+  serviceId          String             @map("service_id")
+  paymentPlanId      String             @map("payment_plan_id")
+  userId             String             @map("user_id")
+  checkoutSessionId  String?            @map("checkout_session_id")
+  status             SubscriptionStatus @default(ACTIVE)
+  currentPeriodStart DateTime?          @map("current_period_start")
+  currentPeriodEnd   DateTime?          @map("current_period_end")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+  service            Service            @relation(fields: [serviceId], references: [id])
+  paymentPlan        PaymentPlan        @relation(fields: [paymentPlanId], references: [id])
+  user               User               @relation(fields: [userId], references: [id])
+  checkoutSession    CheckoutSession?   @relation(fields: [checkoutSessionId], references: [id])
+  usageEvents        UsageEvent[]
+  invoices           Invoice[]
+
+  @@index([serviceId])
+  @@index([paymentPlanId])
+  @@index([userId])
+  @@index([checkoutSessionId])
+  @@map("subscriptions")
+}
+
+model UsageEvent {
+  id             String           @id @default(cuid())
+  serviceId      String           @map("service_id")
+  subscriptionId String           @map("subscription_id")
+  userId         String           @map("user_id")
+  invoiceId      String?          @map("invoice_id")
+  eventKey       String           @map("event_key")
+  quantity       Decimal          @db.Decimal(20, 6)
+  status         UsageEventStatus @default(RECORDED)
+  occurredAt     DateTime         @map("occurred_at")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+  service        Service          @relation(fields: [serviceId], references: [id])
+  subscription   Subscription     @relation(fields: [subscriptionId], references: [id])
+  user           User             @relation(fields: [userId], references: [id])
+  invoice        Invoice?         @relation(fields: [invoiceId], references: [id])
+
+  @@unique([subscriptionId, eventKey])
+  @@index([serviceId])
+  @@index([userId])
+  @@index([invoiceId])
+  @@map("usage_events")
+}
+
+model Invoice {
+  id             String        @id @default(cuid())
+  serviceId      String        @map("service_id")
+  paymentPlanId  String        @map("payment_plan_id")
+  subscriptionId String?       @map("subscription_id")
+  userId         String        @map("user_id")
+  status         InvoiceStatus @default(DRAFT)
+  amount         Decimal       @db.Decimal(20, 6)
+  currency       String        @default("USDC")
+  dueAt          DateTime?     @map("due_at")
+  paidAt         DateTime?     @map("paid_at")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+  service        Service       @relation(fields: [serviceId], references: [id])
+  paymentPlan    PaymentPlan   @relation(fields: [paymentPlanId], references: [id])
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id])
+  user           User          @relation(fields: [userId], references: [id])
+  usageEvents    UsageEvent[]
+  settlements    Settlement[]
+
+  @@index([serviceId])
+  @@index([paymentPlanId])
+  @@index([subscriptionId])
+  @@index([userId])
+  @@map("invoices")
+}
+
+model Settlement {
+  id              String           @id @default(cuid())
+  invoiceId       String           @map("invoice_id")
+  serviceId       String           @map("service_id")
+  payerId         String           @map("payer_id")
+  merchantId      String           @map("merchant_id")
+  amount          Decimal          @db.Decimal(20, 6)
+  currency        String           @default("USDC")
+  referenceHash   String           @map("reference_hash")
+  transactionHash String?          @map("transaction_hash")
+  status          SettlementStatus @default(PENDING)
+  recordedAt      DateTime?        @map("recorded_at")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  invoice         Invoice          @relation(fields: [invoiceId], references: [id])
+  service         Service          @relation(fields: [serviceId], references: [id])
+  payer           User             @relation("SettlementPayer", fields: [payerId], references: [id])
+  merchant        User             @relation("SettlementMerchant", fields: [merchantId], references: [id])
+
+  @@index([invoiceId])
+  @@index([serviceId])
+  @@index([payerId])
+  @@index([merchantId])
+  @@map("settlements")
 }
