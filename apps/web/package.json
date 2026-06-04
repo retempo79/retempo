@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "lint": "tsc --noEmit",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "start": "next start -p ${PORT:-3000}"
   },
   "dependencies": {
     "@retempo/shared": "workspace:*",

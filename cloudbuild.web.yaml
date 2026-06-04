@@ -1,0 +1,14 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - Dockerfile.web
+      - --build-arg
+      - NEXT_PUBLIC_RETEMPO_API_BASE_URL=https://retempo-api-973633221696.asia-southeast1.run.app
+      - -t
+      - asia-southeast1-docker.pkg.dev/signalarc-prod-241205/retempo/retempo-web:phase11-web-003
+      - .
+
+images:
+  - asia-southeast1-docker.pkg.dev/signalarc-prod-241205/retempo/retempo-web:phase11-web-003
