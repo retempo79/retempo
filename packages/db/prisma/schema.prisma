@@ -8,57 +8,41 @@ datasource db {
 }
 
 enum UserRole {
-  CUSTOMER
-  MERCHANT
-  ADMIN
-}
-
-enum UserStatus {
-  ACTIVE
-  DISABLED
+  DEVELOPER
+  PAYER
 }
 
 enum ServiceStatus {
   DRAFT
   ACTIVE
-  ARCHIVED
-}
-
-enum PaymentPlanStatus {
-  DRAFT
-  ACTIVE
-  ARCHIVED
+  DISABLED
 }
 
 enum PricingType {
-  FLAT
+  FIXED_RECURRING
   USAGE_BASED
+  ONE_TIME
 }
 
 enum BillingInterval {
-  ONE_TIME
-  WEEKLY
-  MONTHLY
-  YEARLY
+  MONTH
+  WEEK
+  DAY
+  NONE
 }
 
 enum CheckoutSessionStatus {
-  OPEN
-  COMPLETED
+  PENDING
+  PAID
   EXPIRED
-  CANCELED
+  CANCELLED
 }
 
 enum SubscriptionStatus {
   ACTIVE
-  PAUSED
-  CANCELED
-  ENDED
-}
-
-enum UsageEventStatus {
-  RECORDED
-  INVOICED
+  PAST_DUE
+  CANCELLED
+  EXPIRED
 }
 
 enum InvoiceStatus {
@@ -66,11 +50,13 @@ enum InvoiceStatus {
   OPEN
   PAID
   VOID
+  EXPIRED
 }
 
 enum SettlementStatus {
   PENDING
-  RECORDED
+  SUBMITTED
+  CONFIRMED
   FAILED
 }
 
@@ -78,8 +64,7 @@ model User {
   id                  String            @id @default(cuid())
   email               String            @unique
   name                String?
-  role                UserRole          @default(CUSTOMER)
-  status              UserStatus        @default(ACTIVE)
+  role                UserRole          @default(DEVELOPER)
   createdAt           DateTime          @default(now()) @map("created_at")
   updatedAt           DateTime          @updatedAt @map("updated_at")
   services            Service[]         @relation("ServiceOwner")
@@ -122,7 +107,6 @@ model PaymentPlan {
   billingInterval  BillingInterval   @map("billing_interval")
   amount           Decimal           @db.Decimal(20, 6)
   currency         String            @default("USDC")
-  status           PaymentPlanStatus @default(DRAFT)
   createdAt        DateTime          @default(now()) @map("created_at")
   updatedAt        DateTime          @updatedAt @map("updated_at")
   service          Service           @relation(fields: [serviceId], references: [id])
@@ -139,7 +123,7 @@ model CheckoutSession {
   serviceId     String                @map("service_id")
   paymentPlanId String                @map("payment_plan_id")
   userId        String?               @map("user_id")
-  status        CheckoutSessionStatus @default(OPEN)
+  status        CheckoutSessionStatus @default(PENDING)
   expiresAt     DateTime?             @map("expires_at")
   completedAt   DateTime?             @map("completed_at")
   createdAt     DateTime              @default(now()) @map("created_at")
@@ -181,21 +165,20 @@ model Subscription {
 }
 
 model UsageEvent {
-  id             String           @id @default(cuid())
-  serviceId      String           @map("service_id")
-  subscriptionId String           @map("subscription_id")
-  userId         String           @map("user_id")
-  invoiceId      String?          @map("invoice_id")
-  eventKey       String           @map("event_key")
-  quantity       Decimal          @db.Decimal(20, 6)
-  status         UsageEventStatus @default(RECORDED)
-  occurredAt     DateTime         @map("occurred_at")
-  createdAt      DateTime         @default(now()) @map("created_at")
-  updatedAt      DateTime         @updatedAt @map("updated_at")
-  service        Service          @relation(fields: [serviceId], references: [id])
-  subscription   Subscription     @relation(fields: [subscriptionId], references: [id])
-  user           User             @relation(fields: [userId], references: [id])
-  invoice        Invoice?         @relation(fields: [invoiceId], references: [id])
+  id             String       @id @default(cuid())
+  serviceId      String       @map("service_id")
+  subscriptionId String       @map("subscription_id")
+  userId         String       @map("user_id")
+  invoiceId      String?      @map("invoice_id")
+  eventKey       String       @map("event_key")
+  quantity       Decimal      @db.Decimal(20, 6)
+  occurredAt     DateTime     @map("occurred_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  service        Service      @relation(fields: [serviceId], references: [id])
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id])
+  user           User         @relation(fields: [userId], references: [id])
+  invoice        Invoice?     @relation(fields: [invoiceId], references: [id])
 
   @@unique([subscriptionId, eventKey])
   @@index([serviceId])
