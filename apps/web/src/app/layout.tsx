@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Retempo",
-  description: "Initial Retempo web application skeleton"
+  description: "Recurring USDC settlement orchestration for services and agents"
 };
 
 export default function RootLayout({
