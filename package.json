@@ -8,5 +8,8 @@
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck"
+  },
+  "dependencies": {
+    "@circle-fin/developer-controlled-wallets": "^10.6.0"
   }
 }
