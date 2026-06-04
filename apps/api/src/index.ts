@@ -1,11 +1,21 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import type { Context } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { db, Prisma } from "@retempo/db";
 import { API_ROOT, APP_NAME } from "@retempo/shared";
 
 export const app = new Hono();
+
+app.use(
+  `${API_ROOT}/*`,
+  cors({
+    origin: process.env.WEB_ORIGIN ?? "http://localhost:3000",
+    allowHeaders: ["Content-Type"],
+    allowMethods: ["GET", "POST", "OPTIONS"]
+  })
+);
 
 type JsonRecord = Record<string, unknown>;
 type ApiStatus = Extract<ContentfulStatusCode, 400 | 404 | 409 | 500>;

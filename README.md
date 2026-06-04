@@ -25,4 +25,24 @@ docs            Product and architecture documentation
 
 ## Status
 
-Initial repository setup.
+Issue 7 local MVP baseline.
+
+## Local API configuration
+
+The web app calls the real backend API directly. Set the browser-visible API base URL
+before starting `apps/web`:
+
+```bash
+NEXT_PUBLIC_RETEMPO_API_BASE_URL="http://localhost:8787"
+```
+
+The Hono API allows the local web origin through `WEB_ORIGIN`, defaulting to
+`http://localhost:3000`.
+
+```bash
+WEB_ORIGIN="http://localhost:3000"
+```
+
+The main frontend flow does not use mock handlers, seeded demo records, fake paid
+states, or fake settlement confirmations. Checkout, invoice, and settlement states
+shown in the UI are returned by the backend/database.
