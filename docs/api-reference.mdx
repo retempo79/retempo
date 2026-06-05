@@ -1,0 +1,300 @@
+---
+title: API Reference
+description: Retempo API v0.1 endpoint boundary.
+---
+
+# API reference
+
+The Retempo API root is:
+
+```txt
+/api/v1
+```
+
+Health check is outside the API root:
+
+```txt
+GET /health
+```
+
+## Services
+
+### Create service
+
+```txt
+POST /api/v1/services
+```
+
+Creates a developer service.
+
+Required body fields:
+
+```json
+{
+  "name": "Premium API",
+  "owner": {
+    "email": "developer@example.com",
+    "role": "DEVELOPER"
+  }
+}
+```
+
+Optional body fields include:
+
+```json
+{
+  "description": "Usage-based API service",
+  "status": "DRAFT"
+}
+```
+
+Allowed service statuses:
+
+```txt
+DRAFT
+ACTIVE
+DISABLED
+```
+
+### List services
+
+```txt
+GET /api/v1/services
+```
+
+Returns services ordered by creation time descending.
+
+### Get service
+
+```txt
+GET /api/v1/services/:serviceId
+```
+
+Returns one service with owner and payment plans.
+
+## Payment plans
+
+### Create payment plan
+
+```txt
+POST /api/v1/services/:serviceId/plans
+```
+
+Required body fields:
+
+```json
+{
+  "name": "Monthly plan",
+  "pricingType": "FIXED_RECURRING",
+  "billingInterval": "MONTH",
+  "amount": "5.00"
+}
+```
+
+Allowed pricing types:
+
+```txt
+FIXED_RECURRING
+USAGE_BASED
+ONE_TIME
+```
+
+Allowed billing intervals:
+
+```txt
+MONTH
+WEEK
+DAY
+NONE
+```
+
+Currency defaults to `USDC`.
+
+### List payment plans
+
+```txt
+GET /api/v1/services/:serviceId/plans
+```
+
+Returns payment plans for a service.
+
+## Checkout sessions
+
+### Create checkout session
+
+```txt
+POST /api/v1/checkout-sessions
+```
+
+Required body fields:
+
+```json
+{
+  "serviceId": "service_id",
+  "paymentPlanId": "payment_plan_id"
+}
+```
+
+Optional body fields:
+
+```json
+{
+  "userId": "user_id",
+  "expiresAt": "2026-06-06T00:00:00.000Z"
+}
+```
+
+Checkout sessions can only be created with `PENDING` status.
+
+### Get checkout session
+
+```txt
+GET /api/v1/checkout-sessions/:checkoutSessionId
+```
+
+Returns checkout session state with payment plan, service, subscriptions, and user.
+
+## Usage events
+
+### Create usage event
+
+```txt
+POST /api/v1/usage-events
+```
+
+Required body fields:
+
+```json
+{
+  "serviceId": "service_id",
+  "subscriptionId": "subscription_id",
+  "userId": "user_id",
+  "eventKey": "api_call_001",
+  "quantity": "1"
+}
+```
+
+Optional body fields:
+
+```json
+{
+  "invoiceId": "invoice_id",
+  "occurredAt": "2026-06-06T00:00:00.000Z"
+}
+```
+
+`eventKey` is unique per subscription.
+
+## Invoices
+
+### Create invoice
+
+```txt
+POST /api/v1/invoices
+```
+
+Required body fields:
+
+```json
+{
+  "serviceId": "service_id",
+  "paymentPlanId": "payment_plan_id",
+  "userId": "user_id",
+  "amount": "5.00"
+}
+```
+
+Optional body fields:
+
+```json
+{
+  "subscriptionId": "subscription_id",
+  "currency": "USDC",
+  "status": "OPEN",
+  "dueAt": "2026-06-06T00:00:00.000Z"
+}
+```
+
+Invoices cannot be created as `PAID` without a real payment event.
+
+Allowed invoice statuses:
+
+```txt
+DRAFT
+OPEN
+PAID
+VOID
+EXPIRED
+```
+
+### Get invoice
+
+```txt
+GET /api/v1/invoices/:invoiceId
+```
+
+Returns invoice state with payment plan, service, settlements, subscription, usage events, and user.
+
+## Settlements
+
+### Create settlement
+
+```txt
+POST /api/v1/settlements
+```
+
+Creates or reuses a settlement row for an invoice, submits the settlement transaction, and updates invoice state if the settlement is confirmed.
+
+Required body fields:
+
+```json
+{
+  "invoiceId": "invoice_id",
+  "referenceHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+  "payerAddress": "0x0000000000000000000000000000000000000000",
+  "merchantAddress": "0x0000000000000000000000000000000000000000"
+}
+```
+
+Optional body fields:
+
+```json
+{
+  "payerId": "payer_user_id",
+  "merchantId": "merchant_user_id",
+  "amount": "5.00",
+  "currency": "USDC",
+  "recordedAt": "2026-06-06T00:00:00.000Z"
+}
+```
+
+When `SETTLEMENT_EXECUTION_MODE=circle`, the API can use the configured Circle wallet address as the default payer and merchant address if request addresses are not provided.
+
+A confirmed settlement sets the settlement status to `CONFIRMED` and the invoice status to `PAID`.
+
+Allowed settlement statuses:
+
+```txt
+PENDING
+SUBMITTED
+CONFIRMED
+FAILED
+```
+
+### Get settlement
+
+```txt
+GET /api/v1/settlements/:settlementId
+```
+
+Returns settlement state. If the settlement is `SUBMITTED` and has a transaction hash, the API refreshes the Arc receipt before returning the response.
+
+## Error shape
+
+Errors use this JSON shape:
+
+```json
+{
+  "error": "Message"
+}
+```
