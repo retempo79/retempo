@@ -1,0 +1,44 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Retempo",
+  "colors": {
+    "primary": "#0F172A",
+    "light": "#2563EB",
+    "dark": "#93C5FD"
+  },
+  "favicon": "/favicon.svg",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "docs/introduction",
+              "docs/architecture",
+              "docs/data-model"
+            ]
+          },
+          {
+            "group": "Build",
+            "pages": [
+              "docs/quickstart",
+              "docs/environment",
+              "docs/api-reference",
+              "docs/settlement-contract"
+            ]
+          },
+          {
+            "group": "Operations",
+            "pages": [
+              "docs/deployment",
+              "docs/project-boundaries"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
