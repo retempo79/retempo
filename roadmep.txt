@@ -1,0 +1,203 @@
+✅ Phase 0 — Product Decision
+DONE
+
+✅ Phase 1 — Planning Docs
+DONE
+
+✅ Phase 2 — Repo + Monorepo Skeleton
+DONE
+
+✅ Phase 3 — Prisma Schema v0.1
+DONE
+
+✅ Phase 4 — Real Database Migration + Real Local Postgres Validation
+DONE
+
+✅ Phase 5 — Real Backend API + Real Database Writes
+DONE
+
+✅ Phase 6 — Real Frontend + Real API Calls
+DONE
+
+✅ Phase 7 — Real RetempoSettlement Contract
+DONE
+
+✅ Phase 8 — Real Arc Testnet Deployment
+DONE
+
+✅ Phase 9 — Real Settlement Transaction Flow
+DONE
+
+✅ Phase 10 — Circle Integration + Circle Settlement Execution Mode
+DONE
+
+✅ Circle API key valid
+✅ Entity secret registered
+✅ Circle Developer-Controlled Wallet dibuat di ARC-TESTNET
+✅ Circle wallet funded
+✅ Circle wallet dijadikan authorized operator RetempoSettlement
+✅ Backend punya SETTLEMENT_EXECUTION_MODE=direct
+✅ Backend punya SETTLEMENT_EXECUTION_MODE=circle
+✅ Circle mode submit real contract execution
+✅ Circle txHash diverifikasi lewat Arc RPC receipt
+✅ SettlementRecorded event observed
+✅ settlement CONFIRMED hanya dari real receipt/event
+✅ invoice PAID hanya setelah confirmed settlement
+✅ PR #12 merged
+✅ build/typecheck/lint passed setelah merge
+
+
+✅ Phase 11 — GCP Production Deployment
+DONE
+
+Decision:
+- GCP project baru khusus Retempo sempat dibuat sebagai retempo-prod-001
+- Billing link gagal karena Cloud billing quota exceeded
+- Project retempo-prod-001 kemudian dihapus dan masuk DELETE_REQUESTED
+- Tidak ada production resource yang dibuat di project retempo-prod-001
+- Phase 11 dilanjutkan memakai existing shared team project: signalarc-prod-241205
+- Retempo tetap dibuat terpisah penuh di level resource dengan prefix retempo-
+
+GCP production target:
+- Project: signalarc-prod-241205
+- Region: asia-southeast1 / Singapore
+- Runtime service account: retempo-runtime@signalarc-prod-241205.iam.gserviceaccount.com
+
+Created Retempo production resources:
+- Cloud Run backend API: retempo-api
+- Cloud Run frontend web: retempo-web
+- Cloud SQL PostgreSQL instance: retempo-postgres
+- Cloud SQL database: retempo
+- Cloud SQL user: retempo_app
+- Artifact Registry Docker repository: retempo
+- Secret Manager:
+  - retempo-database-url
+  - retempo-circle-api-key
+  - retempo-circle-entity-secret
+  - retempo-circle-wallet-id
+
+Retempo / SignalArc separation validated:
+- Retempo Cloud Run services are separate from signalarc-backend-api
+- Retempo Cloud SQL instance is separate from signalarc-postgres
+- Retempo secrets are separate from signalarc-database-url
+- Retempo container images use Artifact Registry repository retempo
+- Retempo runtime uses service account retempo-runtime
+- SignalArc production resources were not modified or reused
+
+Backend deployment:
+- Image: asia-southeast1-docker.pkg.dev/signalarc-prod-241205/retempo/retempo-api:phase11-api-003
+- Cloud Run service: retempo-api
+- Active revision: retempo-api-00004-fxs
+- Public URL: https://retempo-api-973633221696.asia-southeast1.run.app
+- Production API domain: https://api.retempo.xyz
+- SETTLEMENT_EXECUTION_MODE=circle
+- Cloud SQL connection: signalarc-prod-241205:asia-southeast1:retempo-postgres
+- DATABASE_URL loaded from Secret Manager
+- Circle API key, entity secret, and wallet ID loaded from Secret Manager
+- WEB_ORIGIN set to https://retempo.xyz
+
+Frontend deployment:
+- Image: asia-southeast1-docker.pkg.dev/signalarc-prod-241205/retempo/retempo-web:phase12-web-001
+- Cloud Run service: retempo-web
+- Active revision: retempo-web-00002-mzc
+- Public URL: https://retempo-web-973633221696.asia-southeast1.run.app
+- Production web domain: https://retempo.xyz
+- NEXT_PUBLIC_RETEMPO_API_BASE_URL built with https://api.retempo.xyz
+- Frontend start script uses Cloud Run PORT
+
+Production validation:
+- Production database migration applied successfully
+- retempo-api /health returned HTTP 200
+- retempo-api /api/v1/services returned HTTP 200 with production DB
+- retempo-web returned HTTP 200
+- Web bundle points to live production API domain, not localhost or old Cloud Run API URL
+- CORS from https://retempo.xyz to https://api.retempo.xyz validated
+- Repo clean and synced with origin/main after deployment commits
+
+Deployment commits:
+- ba7a01c Add Cloud Run API deployment container
+- 7cd145e Add Cloud Run web deployment container
+- 195f42e Point web build to production API domain
+
+
+✅ Phase 12 — Domain Connect
+DONE
+
+Domain decision:
+- Web apex domain: retempo.xyz
+- API subdomain: api.retempo.xyz
+- DNS provider / nameserver: Hostinger DNS parking
+- Nameservers observed:
+  - ns1.dns-parking.com
+  - ns2.dns-parking.com
+
+Domain verification:
+- retempo.xyz verified through Google Search Console / Google domain verification
+- TXT verification record added at Hostinger
+- TXT record observed publicly through DNS
+
+Web domain mapping:
+- Cloud Run domain mapping created:
+  - retempo.xyz -> retempo-web
+- DNS A records added for apex domain:
+  - 216.239.32.21
+  - 216.239.34.21
+  - 216.239.36.21
+  - 216.239.38.21
+- DNS AAAA records added for apex domain:
+  - 2001:4860:4802:32::15
+  - 2001:4860:4802:34::15
+  - 2001:4860:4802:36::15
+  - 2001:4860:4802:38::15
+- Cloud Run managed certificate provisioned successfully
+- Domain mapping status:
+  - Ready=True
+  - CertificateProvisioned=True
+  - DomainRoutable=True
+- https://retempo.xyz live HTTPS
+
+API domain mapping:
+- Cloud Run domain mapping created:
+  - api.retempo.xyz -> retempo-api
+- DNS CNAME record added:
+  - api -> ghs.googlehosted.com
+- Cloud Run managed certificate provisioned successfully
+- Domain mapping status:
+  - Ready=True
+  - CertificateProvisioned=True
+  - DomainRoutable=True
+- https://api.retempo.xyz/health returned HTTP/2 200
+
+Production domain config updates:
+- retempo-api WEB_ORIGIN updated to https://retempo.xyz
+- CORS preflight from https://retempo.xyz to API returned HTTP 204
+- GET /api/v1/services from https://retempo.xyz returned HTTP 200
+- cloudbuild.web.yaml updated:
+  - NEXT_PUBLIC_RETEMPO_API_BASE_URL=https://api.retempo.xyz
+  - image tag retempo-web:phase12-web-001
+- Frontend rebuilt and redeployed:
+  - retempo-web revision retempo-web-00002-mzc
+- https://retempo.xyz bundle now points to api.retempo.xyz
+- Repo clean and synced with origin/main after Phase 12 update
+
+
+⬜ Phase 13 — Real End-to-End Live Test
+NEXT
+
+Target:
+- create service nyata di production via https://retempo.xyz
+- create payment plan nyata di production
+- create checkout/invoice nyata
+- submit settlement nyata via Circle mode through https://api.retempo.xyz
+- tx hash nyata
+- Arc receipt success
+- SettlementRecorded event observed
+- settlement CONFIRMED only from real receipt/event
+- invoice PAID only after confirmed settlement
+- validate production database state
+- validate production UI reflects live API state
+
+Hard rule for Phase 13:
+- No mock
+- No smoke-only simulation
+- Must use real production API, real Cloud SQL production DB, real Circle mode, real Arc Testnet transaction, real receipt/event validation
