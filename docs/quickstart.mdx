@@ -1,0 +1,81 @@
+---
+title: Quickstart
+description: Run the Retempo monorepo locally.
+---
+
+# Quickstart
+
+Retempo is a pnpm monorepo with a Next.js frontend, Hono API, Prisma/PostgreSQL package, and Foundry contract package.
+
+## Prerequisites
+
+Install:
+
+- Node.js
+- pnpm 10
+- PostgreSQL
+- Foundry, only when working on contracts
+
+## Install dependencies
+
+From the repository root:
+
+```bash
+pnpm install
+```
+
+## Configure environment
+
+Create a root `.env` file and provide the variables documented in [Environment](/docs/environment).
+
+The API loads the root `.env` file when it exists.
+
+## Start the API
+
+```bash
+pnpm --filter @retempo/api dev
+```
+
+The API listens on port `8787` by default.
+
+Health check:
+
+```txt
+GET /health
+```
+
+Expected shape:
+
+```json
+{
+  "ok": true,
+  "service": "Retempo",
+  "apiRoot": "/api/v1"
+}
+```
+
+## Start the web app
+
+Set the public API URL for the web app:
+
+```bash
+NEXT_PUBLIC_RETEMPO_API_BASE_URL="http://localhost:8787"
+```
+
+Then start the web app:
+
+```bash
+pnpm --filter @retempo/web dev
+```
+
+## Build all packages
+
+```bash
+pnpm build
+```
+
+## Typecheck all packages
+
+```bash
+pnpm typecheck
+```
