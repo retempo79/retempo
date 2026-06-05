@@ -1,0 +1,53 @@
+---
+title: Introduction
+description: Retempo is agentic recurring payments and usage-based USDC settlement infrastructure on Arc.
+---
+
+# Retempo
+
+Retempo is an agentic recurring payments and usage-based USDC settlement infrastructure project on Arc.
+
+The product enables developers, API providers, SaaS tools, and AI agents to create payment agreements for recurring subscriptions, usage-based API billing, and agent-to-service payments.
+
+## Positioning
+
+Retempo is a programmable recurring settlement layer for AI agents, SaaS APIs, and digital services.
+
+It is not a lending protocol, FX product, prediction market, yield product, custodial balance system, payout system, refund system, dispute system, KYC system, tax system, or multichain product in v0.1.
+
+## MVP scope
+
+The current MVP covers:
+
+- developer services
+- payment plans
+- checkout sessions
+- subscriptions
+- usage events
+- invoices
+- Arc settlement records
+- settlement status and transaction hash tracking
+
+The frontend calls the real backend API. The main UI does not use mock handlers, seeded demo records, fake paid states, or fake settlement confirmations.
+
+## Source of truth
+
+Retempo v0.1 uses a hybrid architecture:
+
+- PostgreSQL is the source of truth for operational state.
+- Arc is the source of truth for settlement proof.
+- Circle Developer Platform is used as a transaction execution path when `SETTLEMENT_EXECUTION_MODE=circle`.
+
+## Repository layout
+
+```txt
+retempo/
+  apps/
+    web/        # Next.js frontend
+    api/        # Hono backend API
+  contracts/    # Solidity / Foundry settlement registry
+  packages/
+    db/         # Prisma / PostgreSQL package
+    shared/     # shared TypeScript constants
+  docs/         # product and architecture documentation
+```
