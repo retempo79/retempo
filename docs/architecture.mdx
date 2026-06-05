@@ -1,0 +1,119 @@
+---
+title: Architecture
+description: Retempo v0.1 uses offchain orchestration with onchain settlement proof.
+---
+
+# Architecture
+
+Retempo v0.1 uses a hybrid architecture: offchain orchestration with onchain settlement proof.
+
+```txt
+User / AI Agent
+     |
+     v
+Retempo Web App
+     |
+     v
+Retempo API Backend
+     |
+     +--> PostgreSQL
+     |
+     +--> Circle Developer Platform
+     |
+     +--> Arc Testnet RPC
+              |
+              v
+       RetempoSettlement contract
+```
+
+## Web app
+
+`apps/web` contains the Next.js frontend.
+
+The web app is responsible for:
+
+- landing page
+- dashboard UI
+- service creation flow
+- payment plan creation flow
+- checkout flow
+- invoice and settlement status display
+
+The browser-visible backend base URL is configured with:
+
+```bash
+NEXT_PUBLIC_RETEMPO_API_BASE_URL="http://localhost:8787"
+```
+
+## API backend
+
+`apps/api` contains the Hono backend API.
+
+The API root is:
+
+```txt
+/api/v1
+```
+
+The backend is responsible for:
+
+- service orchestration
+- payment plan orchestration
+- checkout session state
+- subscription state
+- usage event records
+- invoice lifecycle
+- settlement submission
+- Arc transaction receipt checks
+
+The backend is not a custody ledger, payout system, refund system, FX engine, or compliance engine.
+
+## Database
+
+`packages/db` contains the Prisma schema and PostgreSQL client.
+
+The database stores operational state, including services, payment plans, checkout sessions, subscriptions, usage events, invoices, and settlement rows.
+
+The database does not store user balances in v0.1.
+
+## Settlement execution
+
+Retempo supports two settlement execution modes in the API code:
+
+```txt
+direct
+circle
+```
+
+`direct` uses a configured Arc operator private key.
+
+`circle` uses Circle Developer-Controlled Wallets to create a contract execution transaction.
+
+The selected mode is controlled by:
+
+```bash
+SETTLEMENT_EXECUTION_MODE="direct"
+```
+
+or:
+
+```bash
+SETTLEMENT_EXECUTION_MODE="circle"
+```
+
+## Arc boundary
+
+Arc is used for final settlement proof through the `RetempoSettlement` contract.
+
+The API validates that:
+
+```txt
+ARC_CHAIN_ID=5042002
+```
+
+The settlement contract address must match both configured contract variables:
+
+```txt
+RETEMPO_SETTLEMENT_CONTRACT_ADDRESS
+ARC_TESTNET_RETEMPO_SETTLEMENT_ADDRESS
+```
