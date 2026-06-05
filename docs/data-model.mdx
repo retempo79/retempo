@@ -1,0 +1,121 @@
+---
+title: Data Model
+description: Operational state model for Retempo v0.1.
+---
+
+# Data model
+
+Retempo v0.1 uses PostgreSQL through Prisma.
+
+The database is the source of truth for operational state. Arc is the source of truth for settlement proof.
+
+## Core tables
+
+The Prisma schema defines these core models:
+
+| Model | Purpose |
+| --- | --- |
+| `User` | Developer or payer identity. |
+| `Service` | Product, API, SaaS tool, or digital service created by a developer. |
+| `PaymentPlan` | Pricing rule for a service. |
+| `CheckoutSession` | Pre-payment checkout state. |
+| `Subscription` | Relationship between a user and a payment plan. |
+| `UsageEvent` | Usage record for a subscription. |
+| `Invoice` | Amount owed by a user for a plan or usage period. |
+| `Settlement` | Arc settlement reference for an invoice. |
+
+## Status enums
+
+### UserRole
+
+```txt
+DEVELOPER
+PAYER
+```
+
+### ServiceStatus
+
+```txt
+DRAFT
+ACTIVE
+DISABLED
+```
+
+### PricingType
+
+```txt
+FIXED_RECURRING
+USAGE_BASED
+ONE_TIME
+```
+
+### BillingInterval
+
+```txt
+MONTH
+WEEK
+DAY
+NONE
+```
+
+### CheckoutSessionStatus
+
+```txt
+PENDING
+PAID
+EXPIRED
+CANCELLED
+```
+
+### SubscriptionStatus
+
+```txt
+ACTIVE
+PAST_DUE
+CANCELLED
+EXPIRED
+```
+
+### InvoiceStatus
+
+```txt
+DRAFT
+OPEN
+PAID
+VOID
+EXPIRED
+```
+
+### SettlementStatus
+
+```txt
+PENDING
+SUBMITTED
+CONFIRMED
+FAILED
+```
+
+## Amount precision
+
+Amounts are stored as Prisma decimals with six decimal places:
+
+```txt
+Decimal(20, 6)
+```
+
+The API converts settlement amounts to integer units with six decimal places before submitting `recordSettlement`.
+
+## Boundary
+
+The database stores invoice, usage, subscription, and settlement status state.
+
+It does not store:
+
+- internal user balances
+- pooled funds
+- payouts
+- refunds
+- disputes
+- KYC status
+- FX rates
+- tax state
