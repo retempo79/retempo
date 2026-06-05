@@ -1,0 +1,145 @@
+---
+title: Environment
+description: Environment variables used by the Retempo API and web app.
+---
+
+# Environment
+
+The API loads the root `.env` file when present.
+
+This page documents variables that are referenced by the current codebase.
+
+## Web app
+
+### NEXT_PUBLIC_RETEMPO_API_BASE_URL
+
+Browser-visible URL for the Retempo API.
+
+Example:
+
+```bash
+NEXT_PUBLIC_RETEMPO_API_BASE_URL="http://localhost:8787"
+```
+
+## API server
+
+### PORT
+
+Port used by the Hono API server.
+
+Default:
+
+```bash
+PORT="8787"
+```
+
+### WEB_ORIGIN
+
+Allowed browser origin for API CORS.
+
+Default:
+
+```bash
+WEB_ORIGIN="http://localhost:3000"
+```
+
+### DATABASE_URL
+
+PostgreSQL connection URL used by Prisma.
+
+Example:
+
+```bash
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/retempo"
+```
+
+## Settlement mode
+
+### SETTLEMENT_EXECUTION_MODE
+
+Controls settlement execution mode.
+
+Allowed values:
+
+```txt
+direct
+circle
+```
+
+Default:
+
+```txt
+direct
+```
+
+## Arc configuration
+
+### ARC_RPC_URL
+
+Arc RPC URL used by the API.
+
+### ARC_CHAIN_ID
+
+Arc chain ID expected by the API.
+
+Current implementation requires:
+
+```bash
+ARC_CHAIN_ID="5042002"
+```
+
+### RETEMPO_SETTLEMENT_CONTRACT_ADDRESS
+
+Address of the deployed `RetempoSettlement` contract.
+
+### ARC_TESTNET_RETEMPO_SETTLEMENT_ADDRESS
+
+Expected Arc Testnet deployment address for the same contract.
+
+The API requires this value to match `RETEMPO_SETTLEMENT_CONTRACT_ADDRESS`.
+
+## Direct settlement mode
+
+Required only when:
+
+```bash
+SETTLEMENT_EXECUTION_MODE="direct"
+```
+
+### ARC_DEPLOYER_PRIVATE_KEY
+
+Private key used by the direct Arc settlement executor.
+
+Do not commit this value.
+
+### RETEMPO_OPERATOR_ADDRESS
+
+Address expected to match `ARC_DEPLOYER_PRIVATE_KEY`.
+
+The contract only allows `authorizedOperator` to call `recordSettlement`.
+
+## Circle settlement mode
+
+Required only when:
+
+```bash
+SETTLEMENT_EXECUTION_MODE="circle"
+```
+
+### CIRCLE_API_KEY
+
+Circle Developer Platform API key.
+
+### CIRCLE_ENTITY_SECRET
+
+Circle entity secret used by the Developer-Controlled Wallets client.
+
+### CIRCLE_WALLET_ID
+
+Circle wallet ID used to submit contract execution transactions and fetch the wallet address.
+
+## Security boundary
+
+Never commit secrets to Git.
+
+The repository should only contain examples or documentation for required variable names, not real API keys, entity secrets, private keys, or wallet credentials.
